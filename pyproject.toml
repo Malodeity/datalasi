@@ -67,10 +67,10 @@ all = [
 datalasi = "datalasi.cli.commands:main"
 
 [project.urls]
-Homepage = "https://github.com/malomthethwa/datalasi"
-"Bug Tracker" = "https://github.com/malomthethwa/datalasi/issues"
-Documentation = "https://github.com/malomthethwa/datalasi#readme"
-Changelog = "https://github.com/malomthethwa/datalasi/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/malodeity/datalasi"
+"Bug Tracker" = "https://github.com/malodeity/datalasi/issues"
+Documentation = "https://github.com/malodeity/datalasi#readme"
+Changelog = "https://github.com/malodeity/datalasi/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["datalasi"]

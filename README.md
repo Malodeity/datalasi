@@ -116,7 +116,7 @@ v2 = v1.evolve(
 ## Development
 
 ```bash
-git clone https://github.com/malomthethwa/datalasi
+git clone https://github.com/malodeity/datalasi
 cd datalasi
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
