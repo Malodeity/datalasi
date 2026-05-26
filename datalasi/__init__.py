@@ -50,7 +50,7 @@ from datalasi.errors import (
     SchemaValidationError,
     TypeValidationError,
 )
-from datalasi.io.registry import ContractRegistry, ContractDiff
+from datalasi.io.registry import ContractDiff, ContractRegistry
 from datalasi.version import __version__
 
 __all__ = [

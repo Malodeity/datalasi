@@ -15,7 +15,7 @@ class YAMLWriter:
     """Write a :class:`~datalasi.core.contract.DataContract` to a YAML file."""
 
     @staticmethod
-    def write(contract: "DataContract", path: str) -> None:
+    def write(contract: DataContract, path: str) -> None:
         """Serialize *contract* and write it to *path*.
 
         Parent directories are created automatically if they don't exist.

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Type
+from typing import Any
 
 
 class DataType(ABC):
@@ -34,12 +34,12 @@ class DataType(ABC):
         """
 
     @abstractmethod
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize this type to a plain dict suitable for YAML output."""
 
     @classmethod
     @abstractmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "DataType":
+    def from_dict(cls, d: dict[str, Any]) -> DataType:
         """Deserialize a type from a plain dict (e.g. loaded from YAML)."""
 
     def __repr__(self) -> str:
@@ -61,7 +61,7 @@ class Int64(DataType):
 
     name = "Int64"
 
-    def __init__(self, min: Optional[int] = None, max: Optional[int] = None):
+    def __init__(self, min: int | None = None, max: int | None = None):
         self.min = min
         self.max = max
 
@@ -80,7 +80,7 @@ class Int64(DataType):
             return False
         return True
 
-    def coerce(self, value: Any) -> Optional[int]:
+    def coerce(self, value: Any) -> int | None:
         from datalasi.errors import TypeValidationError
 
         if value is None:
@@ -92,8 +92,8 @@ class Int64(DataType):
         except (TypeError, ValueError) as exc:
             raise TypeValidationError(f"Cannot coerce {value!r} to Int64: {exc}") from exc
 
-    def to_dict(self) -> Dict[str, Any]:
-        d: Dict[str, Any] = {"type": self.name}
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {"type": self.name}
         if self.min is not None:
             d["min"] = self.min
         if self.max is not None:
@@ -101,7 +101,7 @@ class Int64(DataType):
         return d
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "Int64":
+    def from_dict(cls, d: dict[str, Any]) -> Int64:
         return cls(min=d.get("min"), max=d.get("max"))
 
     def __repr__(self) -> str:
@@ -119,7 +119,7 @@ class Int32(DataType):
     name = "Int32"
     _RANGE = (-2_147_483_648, 2_147_483_647)
 
-    def __init__(self, min: Optional[int] = None, max: Optional[int] = None):
+    def __init__(self, min: int | None = None, max: int | None = None):
         self.min = min
         self.max = max
 
@@ -141,7 +141,7 @@ class Int32(DataType):
             return False
         return True
 
-    def coerce(self, value: Any) -> Optional[int]:
+    def coerce(self, value: Any) -> int | None:
         from datalasi.errors import TypeValidationError
 
         if value is None:
@@ -157,8 +157,8 @@ class Int32(DataType):
             raise TypeValidationError(f"Value {result} out of Int32 range [{lo}, {hi}]")
         return result
 
-    def to_dict(self) -> Dict[str, Any]:
-        d: Dict[str, Any] = {"type": self.name}
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {"type": self.name}
         if self.min is not None:
             d["min"] = self.min
         if self.max is not None:
@@ -166,7 +166,7 @@ class Int32(DataType):
         return d
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "Int32":
+    def from_dict(cls, d: dict[str, Any]) -> Int32:
         return cls(min=d.get("min"), max=d.get("max"))
 
     def __repr__(self) -> str:
@@ -188,7 +188,7 @@ class Float64(DataType):
 
     name = "Float64"
 
-    def __init__(self, min: Optional[float] = None, max: Optional[float] = None):
+    def __init__(self, min: float | None = None, max: float | None = None):
         self.min = min
         self.max = max
 
@@ -207,7 +207,7 @@ class Float64(DataType):
             return False
         return True
 
-    def coerce(self, value: Any) -> Optional[float]:
+    def coerce(self, value: Any) -> float | None:
         from datalasi.errors import TypeValidationError
 
         if value is None:
@@ -219,8 +219,8 @@ class Float64(DataType):
         except (TypeError, ValueError) as exc:
             raise TypeValidationError(f"Cannot coerce {value!r} to Float64: {exc}") from exc
 
-    def to_dict(self) -> Dict[str, Any]:
-        d: Dict[str, Any] = {"type": self.name}
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {"type": self.name}
         if self.min is not None:
             d["min"] = self.min
         if self.max is not None:
@@ -228,7 +228,7 @@ class Float64(DataType):
         return d
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "Float64":
+    def from_dict(cls, d: dict[str, Any]) -> Float64:
         return cls(min=d.get("min"), max=d.get("max"))
 
     def __repr__(self) -> str:
@@ -252,12 +252,12 @@ class String(DataType):
 
     def __init__(
         self,
-        max_length: Optional[int] = None,
-        pattern: Optional[str] = None,
+        max_length: int | None = None,
+        pattern: str | None = None,
     ):
         self.max_length = max_length
         self.pattern = pattern
-        self._compiled: Optional[re.Pattern] = re.compile(pattern) if pattern else None
+        self._compiled: re.Pattern | None = re.compile(pattern) if pattern else None
 
     def validate(self, value: Any) -> bool:
         if value is None:
@@ -270,7 +270,7 @@ class String(DataType):
             return False
         return True
 
-    def coerce(self, value: Any) -> Optional[str]:
+    def coerce(self, value: Any) -> str | None:
         from datalasi.errors import TypeValidationError
 
         if value is None:
@@ -281,13 +281,11 @@ class String(DataType):
                 f"String length {len(result)} exceeds max_length {self.max_length}"
             )
         if self._compiled is not None and not self._compiled.fullmatch(result):
-            raise TypeValidationError(
-                f"String {result!r} does not match pattern {self.pattern!r}"
-            )
+            raise TypeValidationError(f"String {result!r} does not match pattern {self.pattern!r}")
         return result
 
-    def to_dict(self) -> Dict[str, Any]:
-        d: Dict[str, Any] = {"type": self.name}
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {"type": self.name}
         if self.max_length is not None:
             d["max_length"] = self.max_length
         if self.pattern is not None:
@@ -295,7 +293,7 @@ class String(DataType):
         return d
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "String":
+    def from_dict(cls, d: dict[str, Any]) -> String:
         return cls(max_length=d.get("max_length"), pattern=d.get("pattern"))
 
     def __repr__(self) -> str:
@@ -322,7 +320,7 @@ class Boolean(DataType):
             return True
         return isinstance(value, bool)
 
-    def coerce(self, value: Any) -> Optional[bool]:
+    def coerce(self, value: Any) -> bool | None:
         from datalasi.errors import TypeValidationError
 
         if value is None:
@@ -339,11 +337,11 @@ class Boolean(DataType):
                 return False
         raise TypeValidationError(f"Cannot coerce {value!r} to Boolean")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {"type": self.name}
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "Boolean":
+    def from_dict(cls, d: dict[str, Any]) -> Boolean:
         return cls()
 
 
@@ -363,7 +361,7 @@ class Date(DataType):
             return True
         return isinstance(value, str) and bool(self._PATTERN.match(value))
 
-    def coerce(self, value: Any) -> Optional[str]:
+    def coerce(self, value: Any) -> str | None:
         from datalasi.errors import TypeValidationError
 
         if value is None:
@@ -375,11 +373,11 @@ class Date(DataType):
             )
         return s
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {"type": self.name}
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "Date":
+    def from_dict(cls, d: dict[str, Any]) -> Date:
         return cls()
 
 
@@ -388,7 +386,7 @@ class Timestamp(DataType):
 
     name = "Timestamp"
 
-    def __init__(self, timezone: Optional[str] = None):
+    def __init__(self, timezone: str | None = None):
         self.timezone = timezone
 
     def validate(self, value: Any) -> bool:
@@ -396,25 +394,23 @@ class Timestamp(DataType):
             return True
         return isinstance(value, str) and len(value) > 0
 
-    def coerce(self, value: Any) -> Optional[str]:
+    def coerce(self, value: Any) -> str | None:
         from datalasi.errors import TypeValidationError
 
         if value is None:
             return None
         if not isinstance(value, str):
-            raise TypeValidationError(
-                f"Cannot coerce {value!r} to Timestamp — expected string"
-            )
+            raise TypeValidationError(f"Cannot coerce {value!r} to Timestamp — expected string")
         return value
 
-    def to_dict(self) -> Dict[str, Any]:
-        d: Dict[str, Any] = {"type": self.name}
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {"type": self.name}
         if self.timezone is not None:
             d["timezone"] = self.timezone
         return d
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "Timestamp":
+    def from_dict(cls, d: dict[str, Any]) -> Timestamp:
         return cls(timezone=d.get("timezone"))
 
     def __repr__(self) -> str:
@@ -433,7 +429,7 @@ class Enum(DataType):
 
     name = "Enum"
 
-    def __init__(self, allowed_values: List[str]):
+    def __init__(self, allowed_values: list[str]):
         if not allowed_values:
             raise ValueError("Enum requires at least one allowed value")
         self.allowed_values = list(allowed_values)
@@ -443,7 +439,7 @@ class Enum(DataType):
             return True
         return value in self.allowed_values
 
-    def coerce(self, value: Any) -> Optional[str]:
+    def coerce(self, value: Any) -> str | None:
         from datalasi.errors import TypeValidationError
 
         if value is None:
@@ -455,11 +451,11 @@ class Enum(DataType):
             )
         return s
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {"type": self.name, "allowed_values": list(self.allowed_values)}
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "Enum":
+    def from_dict(cls, d: dict[str, Any]) -> Enum:
         return cls(allowed_values=d["allowed_values"])
 
     def __repr__(self) -> str:
@@ -470,7 +466,7 @@ class Enum(DataType):
 # Type registry — maps YAML type names to their from_dict constructors
 # ---------------------------------------------------------------------------
 
-TYPE_REGISTRY: Dict[str, Type[DataType]] = {
+TYPE_REGISTRY: dict[str, type[DataType]] = {
     "Int64": Int64,
     "Int32": Int32,
     "Float64": Float64,
@@ -482,7 +478,7 @@ TYPE_REGISTRY: Dict[str, Type[DataType]] = {
 }
 
 
-def type_from_dict(d: Dict[str, Any]) -> DataType:
+def type_from_dict(d: dict[str, Any]) -> DataType:
     """Deserialize a DataType from a plain dict.
 
     The dict must contain a ``type`` key whose value matches one of the
@@ -493,7 +489,5 @@ def type_from_dict(d: Dict[str, Any]) -> DataType:
     """
     type_name = d.get("type")
     if type_name not in TYPE_REGISTRY:
-        raise ValueError(
-            f"Unknown type {type_name!r}. Known types: {sorted(TYPE_REGISTRY)}"
-        )
+        raise ValueError(f"Unknown type {type_name!r}. Known types: {sorted(TYPE_REGISTRY)}")
     return TYPE_REGISTRY[type_name].from_dict(d)

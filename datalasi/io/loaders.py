@@ -15,7 +15,7 @@ class YAMLLoader:
     """Load a :class:`~datalasi.core.contract.DataContract` from a YAML file."""
 
     @staticmethod
-    def load(path: str) -> "DataContract":
+    def load(path: str) -> DataContract:
         """Parse *path* as YAML and return the deserialized contract.
 
         Args:
@@ -49,6 +49,4 @@ class YAMLLoader:
         try:
             return DataContract.from_dict(raw)
         except (KeyError, ValueError, TypeError) as exc:
-            raise ContractLoadError(
-                f"Contract at {path} has invalid structure: {exc}"
-            ) from exc
+            raise ContractLoadError(f"Contract at {path} has invalid structure: {exc}") from exc

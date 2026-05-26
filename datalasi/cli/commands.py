@@ -58,7 +58,9 @@ def validate(contract_path: str, data_path: str, fail_on_warning: bool) -> None:
 
         contract = YAMLLoader.load(contract_path)
     except FileNotFoundError:
-        click.echo(click.style(f"Error: contract file not found: {contract_path}", fg="red"), err=True)
+        click.echo(
+            click.style(f"Error: contract file not found: {contract_path}", fg="red"), err=True
+        )
         sys.exit(2)
     except ContractLoadError as exc:
         click.echo(click.style(f"Error loading contract: {exc}", fg="red"), err=True)
@@ -137,12 +139,15 @@ def infer(
         sys.exit(2)
 
     try:
-        from datalasi.adapters.pandas_adapter import PandasAdapter
         import pandas as pd
+
+        from datalasi.adapters.pandas_adapter import PandasAdapter
 
         if not isinstance(df, pd.DataFrame):
             click.echo(
-                click.style("Error: 'infer' currently requires a Pandas-compatible data file.", fg="red"),
+                click.style(
+                    "Error: 'infer' currently requires a Pandas-compatible data file.", fg="red"
+                ),
                 err=True,
             )
             sys.exit(2)
@@ -150,7 +155,10 @@ def infer(
         schema = PandasAdapter.infer_schema(df)
     except ImportError:
         click.echo(
-            click.style("Error: pandas is required for 'infer'. Run: pip install 'datalasi[pandas]'", fg="red"),
+            click.style(
+                "Error: pandas is required for 'infer'. Run: pip install 'datalasi[pandas]'",
+                fg="red",
+            ),
             err=True,
         )
         sys.exit(2)
@@ -251,7 +259,7 @@ def diff(registry_dir: str, contract_name: str, v1: str, v2: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _load_data(path: str) -> "object":
+def _load_data(path: str) -> object:
     """Load a CSV or Parquet file as a Pandas DataFrame.
 
     Raises:
@@ -271,6 +279,4 @@ def _load_data(path: str) -> "object":
         return pd.read_parquet(path)
     if suffix == ".json":
         return pd.read_json(path)
-    raise ValueError(
-        f"Unsupported file format: {suffix!r}. Supported: .csv, .parquet, .json"
-    )
+    raise ValueError(f"Unsupported file format: {suffix!r}. Supported: .csv, .parquet, .json")

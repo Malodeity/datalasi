@@ -2,6 +2,7 @@
 
 from datalasi.core.contract import DataContract, Field
 from datalasi.core.types import (
+    TYPE_REGISTRY,
     Boolean,
     DataType,
     Date,
@@ -11,7 +12,6 @@ from datalasi.core.types import (
     Int64,
     String,
     Timestamp,
-    TYPE_REGISTRY,
     type_from_dict,
 )
 from datalasi.core.validation import (

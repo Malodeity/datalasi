@@ -2,13 +2,12 @@
 
 import pytest
 
-pd = pytest.importorskip("pandas")
+pytest.importorskip("pandas")
 
-import pandas as pd  # noqa: E402 — only reached if pandas is installed
+import pandas as pd  # noqa: E402
 
-from datalasi import DataContract, Field, Float64, Int64, String, Enum, Boolean, Timestamp
+from datalasi import Boolean, DataContract, Enum, Field, Float64, Int64, String, Timestamp
 from datalasi.adapters.pandas_adapter import PandasAdapter
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -89,7 +88,9 @@ class TestMissingColumn:
     def test_missing_column_name_recorded(self, transactions_contract):
         df = pd.DataFrame({"id": [1]})
         result = PandasAdapter.validate(df, transactions_contract)
-        missing = [v.column for v in result.schema_violations if v.violation_type == "MISSING_COLUMN"]
+        missing = [
+            v.column for v in result.schema_violations if v.violation_type == "MISSING_COLUMN"
+        ]
         assert "amount" in missing
         assert "status" in missing
 
@@ -97,7 +98,8 @@ class TestMissingColumn:
 class TestTypeMismatch:
     def test_string_where_int_expected(self):
         contract = DataContract(
-            name="t", version="1.0.0",
+            name="t",
+            version="1.0.0",
             schema={"id": Field("id", Int64(), nullable=False)},
         )
         df = pd.DataFrame({"id": ["a", "b", "c"]})
@@ -107,7 +109,8 @@ class TestTypeMismatch:
 
     def test_float_where_bool_expected(self):
         contract = DataContract(
-            name="t", version="1.0.0",
+            name="t",
+            version="1.0.0",
             schema={"flag": Field("flag", Boolean())},
         )
         df = pd.DataFrame({"flag": [1.0, 0.0, 1.0]})
@@ -174,7 +177,8 @@ class TestUnknownColumn:
 class TestEnumViolation:
     def test_invalid_enum_value(self):
         contract = DataContract(
-            name="t", version="1.0.0",
+            name="t",
+            version="1.0.0",
             schema={"status": Field("status", Enum(["A", "B"]), nullable=False)},
         )
         df = pd.DataFrame({"status": ["A", "C", "B"]})
@@ -183,7 +187,8 @@ class TestEnumViolation:
 
     def test_valid_enum_values_pass(self):
         contract = DataContract(
-            name="t", version="1.0.0",
+            name="t",
+            version="1.0.0",
             schema={"status": Field("status", Enum(["A", "B"]))},
         )
         df = pd.DataFrame({"status": ["A", "B", "A"]})
@@ -200,7 +205,8 @@ class TestEnumViolation:
 class TestExpectations:
     def test_expectation_amount_gt_zero(self):
         contract = DataContract(
-            name="t", version="1.0.0",
+            name="t",
+            version="1.0.0",
             schema={"amount": Field("amount", Float64())},
             expectations=["amount > 0"],
         )
@@ -212,7 +218,8 @@ class TestExpectations:
 
     def test_expectation_all_pass(self):
         contract = DataContract(
-            name="t", version="1.0.0",
+            name="t",
+            version="1.0.0",
             schema={"amount": Field("amount", Float64())},
             expectations=["amount > 0"],
         )
@@ -222,7 +229,8 @@ class TestExpectations:
 
     def test_expectation_multiple_rules(self):
         contract = DataContract(
-            name="t", version="1.0.0",
+            name="t",
+            version="1.0.0",
             schema={
                 "amount": Field("amount", Float64()),
                 "qty": Field("qty", Int64()),
@@ -235,7 +243,8 @@ class TestExpectations:
 
     def test_expectation_row_indices_captured(self):
         contract = DataContract(
-            name="t", version="1.0.0",
+            name="t",
+            version="1.0.0",
             schema={"x": Field("x", Int64())},
             expectations=["x > 10"],
         )
@@ -245,7 +254,8 @@ class TestExpectations:
 
     def test_invalid_expectation_recorded(self):
         contract = DataContract(
-            name="t", version="1.0.0",
+            name="t",
+            version="1.0.0",
             schema={"x": Field("x", Int64())},
             expectations=["nonexistent_col > 0"],
         )

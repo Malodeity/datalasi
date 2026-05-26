@@ -5,18 +5,16 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 from datalasi.core.contract import DataContract
 from datalasi.errors import ContractNotFoundError
-
 
 # ---------------------------------------------------------------------------
 # Semver comparison helper
 # ---------------------------------------------------------------------------
 
 
-def _parse_version(version: str) -> Tuple[int, int, int]:
+def _parse_version(version: str) -> tuple[int, int, int]:
     """Parse a semver string into a (major, minor, patch) tuple.
 
     Strips a leading ``v`` if present (e.g. ``"v1.2.3"`` → ``(1, 2, 3)``).
@@ -49,8 +47,8 @@ class ContractDiff:
     name: str
     v1: str
     v2: str
-    breaking_changes: List[str] = field(default_factory=list)
-    non_breaking_changes: List[str] = field(default_factory=list)
+    breaking_changes: list[str] = field(default_factory=list)
+    non_breaking_changes: list[str] = field(default_factory=list)
 
     @property
     def has_breaking_changes(self) -> bool:
@@ -112,7 +110,7 @@ class ContractRegistry:
     def __init__(self, registry_dir: str) -> None:
         self.registry_dir = Path(registry_dir)
         # Mapping of "name:version" → DataContract
-        self._contracts: Dict[str, DataContract] = {}
+        self._contracts: dict[str, DataContract] = {}
         self._load_all()
 
     # ------------------------------------------------------------------
@@ -145,7 +143,7 @@ class ContractRegistry:
     # Retrieval
     # ------------------------------------------------------------------
 
-    def get(self, name: str, version: Optional[str] = None) -> DataContract:
+    def get(self, name: str, version: str | None = None) -> DataContract:
         """Retrieve a contract by name and optionally by version.
 
         If *version* is omitted, returns the latest version (sorted by semver).
@@ -153,9 +151,7 @@ class ContractRegistry:
         Raises:
             ContractNotFoundError: if no matching contract is found.
         """
-        matching = [
-            c for key, c in self._contracts.items() if key.startswith(f"{name}:")
-        ]
+        matching = [c for key, c in self._contracts.items() if key.startswith(f"{name}:")]
         if not matching:
             raise ContractNotFoundError(
                 f"No contract named {name!r} found in registry {self.registry_dir}"
@@ -177,9 +173,9 @@ class ContractRegistry:
             # Fall back to lexicographic sort if version isn't semver
             return sorted(matching, key=lambda c: c.version)[-1]
 
-    def list_contracts(self) -> Dict[str, List[str]]:
+    def list_contracts(self) -> dict[str, list[str]]:
         """Return a dict mapping contract name → sorted list of versions."""
-        result: Dict[str, List[str]] = {}
+        result: dict[str, list[str]] = {}
         for c in self._contracts.values():
             result.setdefault(c.name, [])
             result[c.name].append(c.version)
@@ -214,7 +210,7 @@ class ContractRegistry:
             non_breaking_changes=non_breaking,
         )
 
-    def breaking_changes_between(self, name: str, v1: str, v2: str) -> List[str]:
+    def breaking_changes_between(self, name: str, v1: str, v2: str) -> list[str]:
         """Return only the list of breaking change descriptions."""
         return self.diff(name, v1, v2).breaking_changes
 
@@ -234,14 +230,12 @@ class ContractRegistry:
 # ---------------------------------------------------------------------------
 
 
-def _detect_changes(
-    old: DataContract, new: DataContract
-) -> Tuple[List[str], List[str]]:
+def _detect_changes(old: DataContract, new: DataContract) -> tuple[list[str], list[str]]:
     """Compare two contracts and return (breaking_changes, non_breaking_changes)."""
     from datalasi.core.types import Enum as EnumType
 
-    breaking: List[str] = []
-    non_breaking: List[str] = []
+    breaking: list[str] = []
+    non_breaking: list[str] = []
 
     old_schema = old.schema
     new_schema = new.schema
@@ -284,13 +278,9 @@ def _detect_changes(
             removed = old_vals - new_vals
             added = new_vals - old_vals
             if removed:
-                breaking.append(
-                    f"Column '{col}' Enum removed allowed value(s): {sorted(removed)}"
-                )
+                breaking.append(f"Column '{col}' Enum removed allowed value(s): {sorted(removed)}")
             if added:
-                non_breaking.append(
-                    f"Column '{col}' Enum added allowed value(s): {sorted(added)}"
-                )
+                non_breaking.append(f"Column '{col}' Enum added allowed value(s): {sorted(added)}")
 
         # Numeric constraints (Int64, Int32, Float64)
         if old_f.type.name in ("Int64", "Int32", "Float64"):
@@ -307,8 +297,8 @@ def _check_numeric_constraints(
     col: str,
     old_type: Any,
     new_type: Any,
-    breaking: List[str],
-    non_breaking: List[str],
+    breaking: list[str],
+    non_breaking: list[str],
 ) -> None:
     old_min = getattr(old_type, "min", None)
     new_min = getattr(new_type, "min", None)
@@ -317,17 +307,13 @@ def _check_numeric_constraints(
 
     # min increased or newly added → breaking (old valid data may now be below min)
     if new_min is not None and (old_min is None or new_min > old_min):
-        breaking.append(
-            f"Column '{col}' min constraint tightened: {old_min!r} → {new_min!r}"
-        )
+        breaking.append(f"Column '{col}' min constraint tightened: {old_min!r} → {new_min!r}")
     elif old_min is not None and (new_min is None or new_min < old_min):
         non_breaking.append(f"Column '{col}' min constraint relaxed")
 
     # max decreased or newly added → breaking
     if new_max is not None and (old_max is None or new_max < old_max):
-        breaking.append(
-            f"Column '{col}' max constraint tightened: {old_max!r} → {new_max!r}"
-        )
+        breaking.append(f"Column '{col}' max constraint tightened: {old_max!r} → {new_max!r}")
     elif old_max is not None and (new_max is None or new_max > old_max):
         non_breaking.append(f"Column '{col}' max constraint relaxed")
 
@@ -336,16 +322,14 @@ def _check_string_constraints(
     col: str,
     old_type: Any,
     new_type: Any,
-    breaking: List[str],
-    non_breaking: List[str],
+    breaking: list[str],
+    non_breaking: list[str],
 ) -> None:
     old_len = getattr(old_type, "max_length", None)
     new_len = getattr(new_type, "max_length", None)
 
     if new_len is not None and (old_len is None or new_len < old_len):
-        breaking.append(
-            f"Column '{col}' max_length tightened: {old_len!r} → {new_len!r}"
-        )
+        breaking.append(f"Column '{col}' max_length tightened: {old_len!r} → {new_len!r}")
     elif old_len is not None and (new_len is None or new_len > old_len):
         non_breaking.append(f"Column '{col}' max_length relaxed")
 

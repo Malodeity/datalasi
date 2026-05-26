@@ -3,9 +3,9 @@
 import pytest
 from click.testing import CliRunner
 
+from datalasi import DataContract, Enum, Field, Float64, Int64, String
 from datalasi.cli.commands import main
 from datalasi.io.writers import YAMLWriter
-from datalasi import DataContract, Field, Float64, Int64, String, Enum
 
 
 def _make_contract(name="orders", version="1.0.0"):
@@ -21,7 +21,7 @@ def _make_contract(name="orders", version="1.0.0"):
     )
 
 
-pd = pytest.importorskip("pandas")
+pytest.importorskip("pandas")
 import pandas as pd  # noqa: E402
 
 
@@ -106,12 +106,14 @@ class TestInferCommand:
         )
         assert result.exit_code == 0
         import os
+
         assert os.path.exists(output)
 
     def test_inferred_contract_loadable(self, runner, tmp_path, valid_csv):
         output = str(tmp_path / "inferred.yaml")
         runner.invoke(main, ["infer", valid_csv, "--name", "mydata", "--output", output])
         from datalasi.io.loaders import YAMLLoader
+
         contract = YAMLLoader.load(output)
         assert contract.name == "mydata"
         assert contract.version == "1.0.0"
@@ -124,6 +126,7 @@ class TestInferCommand:
         )
         assert result.exit_code == 0
         from datalasi.io.loaders import YAMLLoader
+
         contract = YAMLLoader.load(output)
         assert contract.version == "2.0.0"
 

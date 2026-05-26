@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 
 @dataclass
@@ -23,8 +23,8 @@ class SchemaViolation:
         "MISSING_COLUMN", "TYPE_MISMATCH", "UNKNOWN_COLUMN", "NULLABILITY_VIOLATION"
     ]
     column: str
-    expected: Optional[Any] = None
-    actual: Optional[Any] = None
+    expected: Any | None = None
+    actual: Any | None = None
     severity: Literal["ERROR", "WARNING"] = "ERROR"
 
     def __str__(self) -> str:
@@ -49,10 +49,10 @@ class ExpectationViolation:
     """
 
     rule: str
-    description: Optional[str] = None
+    description: str | None = None
     row_count: int = 0
-    row_indices: List[int] = field(default_factory=list)
-    sample_values: List[Any] = field(default_factory=list)
+    row_indices: list[int] = field(default_factory=list)
+    sample_values: list[Any] = field(default_factory=list)
 
     def __str__(self) -> str:
         label = self.description or self.rule
@@ -74,10 +74,10 @@ class ValidationResult:
     """
 
     success: bool
-    schema_violations: List[SchemaViolation] = field(default_factory=list)
-    expectation_violations: List[ExpectationViolation] = field(default_factory=list)
-    breaking_changes_detected: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    schema_violations: list[SchemaViolation] = field(default_factory=list)
+    expectation_violations: list[ExpectationViolation] = field(default_factory=list)
+    breaking_changes_detected: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __str__(self) -> str:
         status = "PASS" if self.success else "FAIL"

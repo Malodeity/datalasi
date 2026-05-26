@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -19,7 +19,7 @@ class PandasAdapter:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def validate(df: "pd.DataFrame", contract: "DataContract") -> "ValidationResult":
+    def validate(df: pd.DataFrame, contract: DataContract) -> ValidationResult:
         """Validate *df* against *contract* and return a
         :class:`~datalasi.core.validation.ValidationResult`.
 
@@ -29,7 +29,6 @@ class PandasAdapter:
         2. Expectations — each rule string is evaluated against *df*.
         3. Metadata — row count, null counts, cardinality.
         """
-        import pandas as pd
 
         from datalasi.core.validation import (
             ExpectationViolation,
@@ -149,7 +148,7 @@ class PandasAdapter:
         return result
 
     @staticmethod
-    def infer_schema(df: "pd.DataFrame") -> Dict[str, "Field"]:
+    def infer_schema(df: pd.DataFrame) -> dict[str, Field]:
         """Infer a contract schema from a Pandas DataFrame.
 
         Maps each column's dtype to the closest contract type and detects
@@ -161,7 +160,7 @@ class PandasAdapter:
         from datalasi.core.contract import Field
         from datalasi.core.types import Boolean, Date, Float64, Int32, Int64, String, Timestamp
 
-        schema: Dict[str, Field] = {}
+        schema: dict[str, Field] = {}
         for col in df.columns:
             series = df[col]
             dtype_str = str(series.dtype).lower()
@@ -222,7 +221,7 @@ class PandasAdapter:
         return False
 
     @staticmethod
-    def _eval_expectation(df: "pd.DataFrame", rule: str) -> "pd.Series":
+    def _eval_expectation(df: pd.DataFrame, rule: str) -> pd.Series:
         """Evaluate a rule string against *df* and return a boolean Series.
 
         Column names are available as variables in the expression.
@@ -230,7 +229,7 @@ class PandasAdapter:
         """
         import pandas as pd
 
-        namespace: Dict[str, Any] = {col: df[col] for col in df.columns}
+        namespace: dict[str, Any] = {col: df[col] for col in df.columns}
         # Expose pandas for advanced rules: pd.notnull(x), etc.
         namespace["pd"] = pd
         namespace["len"] = len
@@ -243,7 +242,7 @@ class PandasAdapter:
         return pd.Series([bool(result)] * len(df), index=df.index)
 
     @staticmethod
-    def _collect_metadata(df: "pd.DataFrame", contract: "DataContract") -> Dict[str, Any]:
+    def _collect_metadata(df: pd.DataFrame, contract: DataContract) -> dict[str, Any]:
         """Collect diagnostic metadata from *df*."""
         null_counts = df.isnull().sum().to_dict()
         null_pct = {
@@ -252,9 +251,10 @@ class PandasAdapter:
         }
 
         # Cardinality for Enum and String columns (capped for performance)
-        from datalasi.core.types import Enum as EnumType, String as StringType
+        from datalasi.core.types import Enum as EnumType
+        from datalasi.core.types import String as StringType
 
-        cardinality: Dict[str, int] = {}
+        cardinality: dict[str, int] = {}
         for col_name, field in contract.schema.items():
             if col_name in df.columns and isinstance(field.type, (EnumType, StringType)):
                 cardinality[col_name] = int(df[col_name].nunique())

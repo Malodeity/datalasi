@@ -1,7 +1,5 @@
 """Custom exceptions for datalasi."""
 
-from typing import List
-
 
 class ContractError(Exception):
     """Base exception for all datalasi errors."""
@@ -10,7 +8,7 @@ class ContractError(Exception):
 class SchemaValidationError(ContractError):
     """Raised when a DataFrame fails schema validation."""
 
-    def __init__(self, message: str, violations: List = None):
+    def __init__(self, message: str, violations: list = None):
         super().__init__(message)
         self.violations = violations or []
 

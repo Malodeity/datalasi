@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import polars as pl
@@ -19,7 +19,7 @@ class PolarsAdapter:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def validate(df: "pl.DataFrame", contract: "DataContract") -> "ValidationResult":
+    def validate(df: pl.DataFrame, contract: DataContract) -> ValidationResult:
         """Validate *df* against *contract* and return a
         :class:`~datalasi.core.validation.ValidationResult`.
 
@@ -84,7 +84,6 @@ class PolarsAdapter:
             from datalasi.core.types import Enum as EnumType
 
             if isinstance(field.type, EnumType):
-                import polars as pl
 
                 non_null = series.drop_nulls()
                 if len(non_null) > 0:
@@ -145,7 +144,7 @@ class PolarsAdapter:
         return result
 
     @staticmethod
-    def infer_schema(df: "pl.DataFrame") -> Dict[str, "Field"]:
+    def infer_schema(df: pl.DataFrame) -> dict[str, Field]:
         """Infer a contract schema from a Polars DataFrame.
 
         Returns:
@@ -156,15 +155,20 @@ class PolarsAdapter:
         from datalasi.core.contract import Field
         from datalasi.core.types import Boolean, Date, Float64, Int32, Int64, String, Timestamp
 
-        schema: Dict[str, Field] = {}
+        schema: dict[str, Field] = {}
         for col_name, dtype in zip(df.columns, df.dtypes):
             nullable = df[col_name].null_count() > 0
 
             if dtype == pl.Int32:
                 col_type = Int32()
             elif dtype in (
-                pl.Int8, pl.Int16, pl.Int64,
-                pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64,
+                pl.Int8,
+                pl.Int16,
+                pl.Int64,
+                pl.UInt8,
+                pl.UInt16,
+                pl.UInt32,
+                pl.UInt64,
             ):
                 col_type = Int64()
             elif dtype in (pl.Float32, pl.Float64):
@@ -226,10 +230,19 @@ class PolarsAdapter:
         dtype_str = str(polars_dtype).lower()
 
         if type_name == "Int64":
-            return polars_dtype in (
-                pl.Int8, pl.Int16, pl.Int64,
-                pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64,
-            ) or "int" in dtype_str
+            return (
+                polars_dtype
+                in (
+                    pl.Int8,
+                    pl.Int16,
+                    pl.Int64,
+                    pl.UInt8,
+                    pl.UInt16,
+                    pl.UInt32,
+                    pl.UInt64,
+                )
+                or "int" in dtype_str
+            )
         if type_name == "Int32":
             return polars_dtype == pl.Int32 or dtype_str == "int32"
         if type_name == "Float64":
@@ -243,13 +256,16 @@ class PolarsAdapter:
         if type_name == "Date":
             return polars_dtype == pl.Date or "date" in dtype_str
         if type_name == "Enum":
-            return polars_dtype in PolarsAdapter._string_dtypes() or isinstance(
-                polars_dtype, pl.Categorical
-            ) or "str" in dtype_str or "categorical" in dtype_str
+            return (
+                polars_dtype in PolarsAdapter._string_dtypes()
+                or isinstance(polars_dtype, pl.Categorical)
+                or "str" in dtype_str
+                or "categorical" in dtype_str
+            )
         return False
 
     @staticmethod
-    def _eval_expectation(df: "pl.DataFrame", rule: str) -> "pl.Series":
+    def _eval_expectation(df: pl.DataFrame, rule: str) -> pl.Series:
         """Evaluate a rule string and return a boolean Series.
 
         Column names are bound as variables (Polars Series) in the expression.
@@ -257,7 +273,7 @@ class PolarsAdapter:
         """
         import polars as pl
 
-        namespace: Dict[str, Any] = {col: df[col] for col in df.columns}
+        namespace: dict[str, Any] = {col: df[col] for col in df.columns}
         namespace["pl"] = pl
         namespace["len"] = len
 
@@ -269,9 +285,10 @@ class PolarsAdapter:
         return pl.Series([bool(result)] * len(df))
 
     @staticmethod
-    def _collect_metadata(df: "pl.DataFrame", contract: "DataContract") -> Dict[str, Any]:
+    def _collect_metadata(df: pl.DataFrame, contract: DataContract) -> dict[str, Any]:
         """Collect diagnostic metadata from *df*."""
-        from datalasi.core.types import Enum as EnumType, String as StringType
+        from datalasi.core.types import Enum as EnumType
+        from datalasi.core.types import String as StringType
 
         null_counts = {col: df[col].null_count() for col in df.columns}
         null_pct = {
@@ -279,7 +296,7 @@ class PolarsAdapter:
             for col, count in null_counts.items()
         }
 
-        cardinality: Dict[str, int] = {}
+        cardinality: dict[str, int] = {}
         for col_name, field in contract.schema.items():
             if col_name in df.columns and isinstance(field.type, (EnumType, StringType)):
                 cardinality[col_name] = df[col_name].n_unique()

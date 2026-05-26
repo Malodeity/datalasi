@@ -2,7 +2,7 @@
 
 import pytest
 
-from datalasi import DataContract, Field, Float64, Int64, String, Enum, Timestamp
+from datalasi import DataContract, Enum, Field, Float64, Int64, String
 from datalasi.core.types import Boolean
 
 

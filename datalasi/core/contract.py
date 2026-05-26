@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 from datalasi.core.types import DataType, type_from_dict
 
@@ -24,7 +24,7 @@ class Field:
         type: DataType,  # noqa: A002  (shadowing built-in intentionally)
         nullable: bool = True,
         pk: bool = False,
-        description: Optional[str] = None,
+        description: str | None = None,
     ) -> None:
         self.name = name
         self.type = type
@@ -36,12 +36,12 @@ class Field:
     # Serialization
     # ------------------------------------------------------------------
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize this field to a plain dict suitable for YAML output."""
         type_dict = self.type.to_dict()
         type_name = type_dict.pop("type")
 
-        d: Dict[str, Any] = {"type": type_name}
+        d: dict[str, Any] = {"type": type_name}
         d.update(type_dict)
         d["nullable"] = self.nullable
         if self.pk:
@@ -51,7 +51,7 @@ class Field:
         return d
 
     @classmethod
-    def from_dict(cls, name: str, d: Dict[str, Any]) -> "Field":
+    def from_dict(cls, name: str, d: dict[str, Any]) -> Field:
         """Deserialize a field from a plain dict (e.g. one YAML schema entry).
 
         The dict must contain a ``type`` key. All other type-specific keys
@@ -110,12 +110,12 @@ class DataContract:
         self,
         name: str,
         version: str,
-        schema: Dict[str, Field],
-        expectations: Optional[List[str]] = None,
+        schema: dict[str, Field],
+        expectations: list[str] | None = None,
         breaking_changes: Literal["FAIL", "WARN", "IGNORE"] = "FAIL",
-        owner: Optional[str] = None,
-        description: Optional[str] = None,
-        tags: Optional[Dict[str, str]] = None,
+        owner: str | None = None,
+        description: str | None = None,
+        tags: dict[str, str] | None = None,
     ) -> None:
         self.name = name
         self.version = version
@@ -140,9 +140,9 @@ class DataContract:
     # Serialization
     # ------------------------------------------------------------------
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize the contract to a plain dict suitable for YAML output."""
-        d: Dict[str, Any] = {
+        d: dict[str, Any] = {
             "name": self.name,
             "version": self.version,
             "schema": {col: field.to_dict() for col, field in self.schema.items()},
@@ -158,7 +158,7 @@ class DataContract:
         return d
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "DataContract":
+    def from_dict(cls, d: dict[str, Any]) -> DataContract:
         """Deserialize a contract from a plain dict (e.g. loaded from YAML)."""
         raw_schema = d.get("schema") or {}
         schema = {name: Field.from_dict(name, field_d) for name, field_d in raw_schema.items()}
@@ -197,7 +197,7 @@ class DataContract:
         YAMLWriter.write(self, path)
 
     @classmethod
-    def load(cls, path: str) -> "DataContract":
+    def load(cls, path: str) -> DataContract:
         """Load a contract from a YAML file at *path*."""
         from datalasi.io.loaders import YAMLLoader
 
@@ -247,7 +247,7 @@ class DataContract:
     # Schema evolution
     # ------------------------------------------------------------------
 
-    def evolve(self, **changes: Any) -> "DataContract":
+    def evolve(self, **changes: Any) -> DataContract:
         """Return a new :class:`DataContract` with the given changes applied.
 
         Supported keyword arguments mirror the constructor parameters

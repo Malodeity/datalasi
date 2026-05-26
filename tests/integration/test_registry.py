@@ -2,9 +2,9 @@
 
 import pytest
 
-from datalasi import DataContract, Field, Float64, Int64, String, Enum
+from datalasi import DataContract, Enum, Field, Float64, Int64, String
 from datalasi.errors import ContractNotFoundError
-from datalasi.io.registry import ContractRegistry, ContractDiff, _detect_changes
+from datalasi.io.registry import ContractDiff, ContractRegistry, _detect_changes
 from datalasi.io.writers import YAMLWriter
 
 
@@ -202,11 +202,13 @@ class TestBreakingChanges:
 
     def test_nullable_to_nonnullable_is_breaking(self):
         old = DataContract(
-            name="t", version="1.0.0",
+            name="t",
+            version="1.0.0",
             schema={"x": Field("x", Int64(), nullable=True)},
         )
         new = DataContract(
-            name="t", version="1.1.0",
+            name="t",
+            version="1.1.0",
             schema={"x": Field("x", Int64(), nullable=False)},
         )
         breaking, _ = _detect_changes(old, new)
@@ -214,11 +216,13 @@ class TestBreakingChanges:
 
     def test_nonnullable_to_nullable_is_non_breaking(self):
         old = DataContract(
-            name="t", version="1.0.0",
+            name="t",
+            version="1.0.0",
             schema={"x": Field("x", Int64(), nullable=False)},
         )
         new = DataContract(
-            name="t", version="1.1.0",
+            name="t",
+            version="1.1.0",
             schema={"x": Field("x", Int64(), nullable=True)},
         )
         breaking, non_breaking = _detect_changes(old, new)
@@ -227,11 +231,13 @@ class TestBreakingChanges:
 
     def test_max_decreased_is_breaking(self):
         old = DataContract(
-            name="t", version="1.0.0",
+            name="t",
+            version="1.0.0",
             schema={"x": Field("x", Float64(max=1000.0))},
         )
         new = DataContract(
-            name="t", version="1.1.0",
+            name="t",
+            version="1.1.0",
             schema={"x": Field("x", Float64(max=100.0))},
         )
         breaking, _ = _detect_changes(old, new)
@@ -239,11 +245,13 @@ class TestBreakingChanges:
 
     def test_max_increased_is_non_breaking(self):
         old = DataContract(
-            name="t", version="1.0.0",
+            name="t",
+            version="1.0.0",
             schema={"x": Field("x", Float64(max=100.0))},
         )
         new = DataContract(
-            name="t", version="1.1.0",
+            name="t",
+            version="1.1.0",
             schema={"x": Field("x", Float64(max=1000.0))},
         )
         breaking, non_breaking = _detect_changes(old, new)
@@ -251,11 +259,13 @@ class TestBreakingChanges:
 
     def test_string_max_length_decreased_is_breaking(self):
         old = DataContract(
-            name="t", version="1.0.0",
+            name="t",
+            version="1.0.0",
             schema={"s": Field("s", String(max_length=500))},
         )
         new = DataContract(
-            name="t", version="1.1.0",
+            name="t",
+            version="1.1.0",
             schema={"s": Field("s", String(max_length=100))},
         )
         breaking, _ = _detect_changes(old, new)
@@ -263,11 +273,13 @@ class TestBreakingChanges:
 
     def test_enum_value_added_is_non_breaking(self):
         old = DataContract(
-            name="t", version="1.0.0",
+            name="t",
+            version="1.0.0",
             schema={"s": Field("s", Enum(["A", "B"]))},
         )
         new = DataContract(
-            name="t", version="1.1.0",
+            name="t",
+            version="1.1.0",
             schema={"s": Field("s", Enum(["A", "B", "C"]))},
         )
         breaking, non_breaking = _detect_changes(old, new)

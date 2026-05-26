@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from datalasi.io.registry import ContractDiff
 
 
-def print_validation_result(result: "ValidationResult", contract_name: str) -> None:
+def print_validation_result(result: ValidationResult, contract_name: str) -> None:
     """Print a human-readable validation summary to stdout."""
     row_count = result.metadata.get("row_count", "?")
     col_count = result.metadata.get("column_count", "?")
@@ -53,7 +53,7 @@ def print_validation_result(result: "ValidationResult", contract_name: str) -> N
             click.echo(click.style(msg, fg="red"))
 
 
-def print_diff(diff: "ContractDiff") -> None:
+def print_diff(diff: ContractDiff) -> None:
     """Print a human-readable diff summary to stdout."""
     click.echo(f"\n{diff.name}: {diff.v1} → {diff.v2}")
 
@@ -72,9 +72,7 @@ def print_diff(diff: "ContractDiff") -> None:
 
     if diff.non_breaking_changes:
         click.echo(
-            click.style(
-                f"\n  Non-breaking changes ({len(diff.non_breaking_changes)}):", fg="green"
-            )
+            click.style(f"\n  Non-breaking changes ({len(diff.non_breaking_changes)}):", fg="green")
         )
         for c in diff.non_breaking_changes:
             click.echo(click.style(f"    + {c}", fg="green"))
@@ -93,6 +91,5 @@ def print_registry(contracts: dict) -> None:
         version_list = ", ".join(versions)
         click.echo(
             f"  {click.style(name, bold=True)}  "
-            f"[{version_list}]  "
-            + click.style(f"(latest: {latest})", fg="cyan")
+            f"[{version_list}]  " + click.style(f"(latest: {latest})", fg="cyan")
         )

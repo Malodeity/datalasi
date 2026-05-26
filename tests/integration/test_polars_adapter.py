@@ -2,14 +2,13 @@
 
 import pytest
 
-pl = pytest.importorskip("polars")
+pytest.importorskip("polars")
 
 import polars as pl  # noqa: E402
 
-from datalasi import DataContract, Field, Float64, Int64, String, Enum, Boolean, Timestamp, Date
+from datalasi import Boolean, DataContract, Enum, Field, Float64, Int64, String
 from datalasi.adapters.polars_adapter import PolarsAdapter
 from datalasi.core.types import Int32
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -82,7 +81,9 @@ class TestMissingColumn:
     def test_missing_column_names_recorded(self, transactions_contract):
         df = pl.DataFrame({"id": [1]})
         result = PolarsAdapter.validate(df, transactions_contract)
-        missing = [v.column for v in result.schema_violations if v.violation_type == "MISSING_COLUMN"]
+        missing = [
+            v.column for v in result.schema_violations if v.violation_type == "MISSING_COLUMN"
+        ]
         assert "amount" in missing
         assert "status" in missing
 
@@ -90,7 +91,8 @@ class TestMissingColumn:
 class TestTypeMismatch:
     def test_string_where_int_expected(self):
         contract = DataContract(
-            name="t", version="1.0.0",
+            name="t",
+            version="1.0.0",
             schema={"id": Field("id", Int64(), nullable=False)},
         )
         df = pl.DataFrame({"id": ["a", "b", "c"]})
@@ -162,7 +164,8 @@ class TestUnknownColumn:
 class TestExpectations:
     def test_expectation_failure(self):
         contract = DataContract(
-            name="t", version="1.0.0",
+            name="t",
+            version="1.0.0",
             schema={"amount": Field("amount", Float64())},
             expectations=["amount > 0"],
         )
@@ -174,7 +177,8 @@ class TestExpectations:
 
     def test_expectation_all_pass(self):
         contract = DataContract(
-            name="t", version="1.0.0",
+            name="t",
+            version="1.0.0",
             schema={"amount": Field("amount", Float64())},
             expectations=["amount > 0"],
         )
@@ -184,7 +188,8 @@ class TestExpectations:
 
     def test_invalid_expectation_recorded(self):
         contract = DataContract(
-            name="t", version="1.0.0",
+            name="t",
+            version="1.0.0",
             schema={"x": Field("x", Int64())},
             expectations=["nonexistent_col > 0"],
         )
