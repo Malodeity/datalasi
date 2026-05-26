@@ -111,11 +111,12 @@ class DataContract:
         name: str,
         version: str,
         schema: dict[str, Field],
-        expectations: list[str] | None = None,
+        expectations: list | None = None,
         breaking_changes: Literal["FAIL", "WARN", "IGNORE"] = "FAIL",
         owner: str | None = None,
         description: str | None = None,
         tags: dict[str, str] | None = None,
+        extends: str | None = None,
     ) -> None:
         self.name = name
         self.version = version
@@ -125,6 +126,7 @@ class DataContract:
         self.owner = owner
         self.description = description
         self.tags = tags or {}
+        self.extends = extends
 
     # ------------------------------------------------------------------
     # Field access helpers
@@ -146,9 +148,13 @@ class DataContract:
             "name": self.name,
             "version": self.version,
             "schema": {col: field.to_dict() for col, field in self.schema.items()},
-            "expectations": list(self.expectations),
+            "expectations": [
+                e.to_dict() if hasattr(e, "to_dict") else e for e in self.expectations
+            ],
             "breaking_changes": self.breaking_changes,
         }
+        if self.extends is not None:
+            d["extends"] = self.extends
         if self.owner is not None:
             d["owner"] = self.owner
         if self.description is not None:
@@ -160,18 +166,29 @@ class DataContract:
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> DataContract:
         """Deserialize a contract from a plain dict (e.g. loaded from YAML)."""
+        from datalasi.core.expectations import ExpectationRule
+
         raw_schema = d.get("schema") or {}
         schema = {name: Field.from_dict(name, field_d) for name, field_d in raw_schema.items()}
+
+        raw_expectations = d.get("expectations") or []
+        expectations: list = []
+        for e in raw_expectations:
+            if isinstance(e, dict):
+                expectations.append(ExpectationRule.from_dict(e))
+            else:
+                expectations.append(str(e))
 
         return cls(
             name=d["name"],
             version=d["version"],
             schema=schema,
-            expectations=list(d.get("expectations") or []),
+            expectations=expectations,
             breaking_changes=d.get("breaking_changes", "FAIL"),
             owner=d.get("owner"),
             description=d.get("description"),
             tags=dict(d.get("tags") or {}),
+            extends=d.get("extends"),
         )
 
     def to_yaml(self) -> str:
@@ -185,6 +202,29 @@ class DataContract:
         import json
 
         return json.dumps(self.to_dict(), indent=2)
+
+    def to_json_schema(self) -> dict[str, Any]:
+        """Export this contract as a JSON Schema (draft-07) document.
+
+        Useful for generating validation schemas for REST APIs, form builders,
+        and other tooling that speaks JSON Schema.
+
+        Returns:
+            A JSON-serialisable dict representing the schema.
+        """
+        from datalasi.export.json_schema import to_json_schema
+
+        return to_json_schema(self)
+
+    def to_avro_schema(self) -> dict[str, Any]:
+        """Export this contract as an Apache Avro schema.
+
+        Returns:
+            A JSON-serialisable dict representing the Avro record schema.
+        """
+        from datalasi.export.avro import to_avro_schema
+
+        return to_avro_schema(self)
 
     # ------------------------------------------------------------------
     # Persistence helpers
@@ -207,12 +247,18 @@ class DataContract:
     # Validation (adapter dispatch — Phase 2)
     # ------------------------------------------------------------------
 
-    def validate(self, df: Any) -> Any:
+    def validate(self, df: Any, coerce: bool = False) -> Any:
         """Validate a DataFrame against this contract.
 
-        Auto-detects whether *df* is a Pandas or Polars DataFrame and
-        dispatches to the appropriate adapter.  Returns a
+        Auto-detects whether *df* is a Pandas, Polars, or PyArrow DataFrame/Table
+        and dispatches to the appropriate adapter.  Returns a
         :class:`~datalasi.core.validation.ValidationResult`.
+
+        Args:
+            df: A Pandas DataFrame, Polars DataFrame, or PyArrow Table.
+            coerce: When ``True``, attempt to cast each column to its declared
+                type before validation and record the coercions in
+                ``result.coercions_applied``.  The original *df* is not mutated.
 
         Raises:
             ValueError: if *df* is not a supported DataFrame type.
@@ -224,7 +270,7 @@ class DataContract:
             if isinstance(df, pd.DataFrame):
                 from datalasi.adapters.pandas_adapter import PandasAdapter
 
-                return PandasAdapter.validate(df, self)
+                return PandasAdapter.validate(df, self, coerce=coerce)
         except ImportError:
             pass
 
@@ -234,13 +280,64 @@ class DataContract:
             if isinstance(df, pl.DataFrame):
                 from datalasi.adapters.polars_adapter import PolarsAdapter
 
-                return PolarsAdapter.validate(df, self)
+                return PolarsAdapter.validate(df, self, coerce=coerce)
+        except ImportError:
+            pass
+
+        try:
+            import pyarrow as pa
+
+            if isinstance(df, pa.Table):
+                from datalasi.adapters.arrow_adapter import ArrowAdapter
+
+                return ArrowAdapter.validate(df, self)
         except ImportError:
             pass
 
         raise ValueError(
             f"Unsupported DataFrame type: {type(df).__name__}. "
-            "Install datalasi[pandas] or datalasi[polars]."
+            "Install datalasi[pandas], datalasi[polars], or datalasi[arrow]."
+        )
+
+    # ------------------------------------------------------------------
+    # Contract inheritance
+    # ------------------------------------------------------------------
+
+    def resolve(self, registry: Any) -> DataContract:
+        """Return a new contract with inherited fields merged from the parent.
+
+        When ``self.extends`` is set, the parent contract's schema and
+        expectations are fetched from *registry* (latest version) and merged
+        with the child's definitions.  Child fields override parent fields of
+        the same name.
+
+        Args:
+            registry: A :class:`~datalasi.io.registry.ContractRegistry` instance.
+
+        Returns:
+            A fully merged :class:`DataContract` (``self`` if ``extends`` is
+            not set).
+        """
+        if not self.extends:
+            return self
+
+        parent = registry.get(self.extends)
+        merged_schema = dict(parent.schema)
+        merged_schema.update(self.schema)
+        merged_expectations = list(parent.expectations) + [
+            e for e in self.expectations if e not in parent.expectations
+        ]
+
+        return DataContract(
+            name=self.name,
+            version=self.version,
+            schema=merged_schema,
+            expectations=merged_expectations,
+            breaking_changes=self.breaking_changes,
+            owner=self.owner or parent.owner,
+            description=self.description or parent.description,
+            tags={**parent.tags, **self.tags},
+            extends=self.extends,
         )
 
     # ------------------------------------------------------------------
@@ -282,6 +379,7 @@ class DataContract:
             owner=changes.get("owner", self.owner),
             description=changes.get("description", self.description),
             tags=changes.get("tags", dict(self.tags)),
+            extends=changes.get("extends", self.extends),
         )
 
     def __repr__(self) -> str:

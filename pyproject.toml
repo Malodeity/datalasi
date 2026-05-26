@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "datalasi"
-version = "0.1.0"
-description = "Git-backed data schema versioning and enforcement for Python"
+version = "0.2.0"
+description = "Define data contracts as YAML, validate pandas/polars/arrow DataFrames, and gate CI on breaking schema changes"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "Apache-2.0" }
@@ -54,6 +54,7 @@ dev = [
   "ruff>=0.1",
   "mypy>=1.0",
   "types-PyYAML",
+  "sqlalchemy>=2.0",
 ]
 all = [
   "pandas>=1.5",

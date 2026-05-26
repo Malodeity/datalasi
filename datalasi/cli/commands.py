@@ -3,14 +3,17 @@
 Commands:
   validate  — validate a CSV/Parquet file against a contract
   infer     — infer a contract schema from a data file
+  init      — interactively create a new contract YAML
   list      — list contracts in a registry directory
   diff      — show breaking/non-breaking changes between two contract versions
+  check     — check for breaking changes against the previous version (CI gate)
 """
 
 from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 import click
 
@@ -89,6 +92,137 @@ def validate(contract_path: str, data_path: str, fail_on_warning: bool) -> None:
         warnings = [v for v in result.schema_violations if v.severity == "WARNING"]
         if warnings:
             sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# init
+# ---------------------------------------------------------------------------
+
+_SUPPORTED_TYPES = ["Int64", "Int32", "Float64", "String", "Boolean", "Date", "Timestamp", "Enum"]
+
+
+@main.command()
+@click.option("--output", default=None, metavar="PATH", help="Output YAML file path.")
+def init(output: str | None) -> None:
+    """Interactively create a new data contract YAML file.
+
+    Walks through prompts to define the contract name, version, columns,
+    and expectations, then writes the result to a YAML file.
+
+    Example:
+
+        datalasi init
+        datalasi init --output contracts/orders-v1.0.0.yaml
+    """
+    from datalasi.core.contract import DataContract, Field
+    from datalasi.core.types import (
+        TYPE_REGISTRY,
+        Enum,
+        String,
+        Timestamp,
+    )
+    from datalasi.io.writers import YAMLWriter
+
+    click.echo(click.style("datalasi — new contract wizard", bold=True))
+    click.echo()
+
+    name = click.prompt("Contract name (e.g. orders)")
+    version = click.prompt("Version", default="1.0.0")
+    owner = click.prompt("Owner email / team (optional)", default="", show_default=False)
+    description = click.prompt("Description (optional)", default="", show_default=False)
+
+    click.echo()
+    click.echo("Define columns (press Enter with an empty name to finish):")
+
+    schema: dict[str, Field] = {}
+    while True:
+        click.echo()
+        col_name = click.prompt("  Column name", default="", show_default=False).strip()
+        if not col_name:
+            if not schema:
+                click.echo(click.style("  At least one column is required.", fg="yellow"))
+                continue
+            break
+
+        type_choices = "/".join(_SUPPORTED_TYPES)
+        type_name = click.prompt(f"  Type [{type_choices}]", default="String")
+        while type_name not in _SUPPORTED_TYPES:
+            click.echo(click.style(f"  Unknown type. Choose from: {type_choices}", fg="yellow"))
+            type_name = click.prompt(f"  Type [{type_choices}]", default="String")
+
+        # Type-specific options
+        col_type: Any
+        if type_name == "Enum":
+            raw = click.prompt("  Allowed values (comma-separated)")
+            allowed = [v.strip() for v in raw.split(",") if v.strip()]
+            col_type = Enum(allowed)
+        elif type_name in ("Int64", "Int32", "Float64"):
+            min_val = click.prompt("  Min value (optional)", default="", show_default=False)
+            max_val = click.prompt("  Max value (optional)", default="", show_default=False)
+            kw: dict[str, Any] = {}
+            if min_val:
+                kw["min"] = float(min_val) if type_name == "Float64" else int(min_val)
+            if max_val:
+                kw["max"] = float(max_val) if type_name == "Float64" else int(max_val)
+            col_type = TYPE_REGISTRY[type_name].from_dict({**kw, "type": type_name})
+        elif type_name == "String":
+            max_len = click.prompt("  Max length (optional)", default="", show_default=False)
+            pattern = click.prompt("  Regex pattern (optional)", default="", show_default=False)
+            col_type = String(
+                max_length=int(max_len) if max_len else None,
+                pattern=pattern or None,
+            )
+        elif type_name == "Timestamp":
+            tz = click.prompt("  Timezone (optional, e.g. UTC)", default="", show_default=False)
+            col_type = Timestamp(timezone=tz or None)
+        else:
+            col_type = TYPE_REGISTRY[type_name].from_dict({"type": type_name})
+
+        nullable = click.confirm("  Nullable?", default=True)
+        pk = click.confirm("  Primary key?", default=False)
+        col_desc = click.prompt("  Description (optional)", default="", show_default=False)
+
+        schema[col_name] = Field(
+            name=col_name,
+            type=col_type,
+            nullable=nullable,
+            pk=pk,
+            description=col_desc or None,
+        )
+        click.echo(click.style(f"  ✓ {col_name} ({type_name})", fg="green"))
+
+    click.echo()
+    click.echo("Add data-quality expectations (press Enter to skip):")
+    expectations: list[str] = []
+    while True:
+        exp = click.prompt(
+            '  Expectation (e.g. "amount > 0")', default="", show_default=False
+        ).strip()
+        if not exp:
+            break
+        expectations.append(exp)
+        click.echo(click.style(f"  ✓ {exp!r}", fg="green"))
+
+    contract = DataContract(
+        name=name,
+        version=version,
+        schema=schema,
+        expectations=expectations,
+        owner=owner or None,
+        description=description or None,
+    )
+
+    if output is None:
+        default_path = f"contracts/{name}-v{version}.yaml"
+        output = click.prompt("Output file", default=default_path)
+
+    YAMLWriter.write(contract, output)
+    click.echo()
+    click.echo(
+        click.style("✓ Contract written: ", fg="green")
+        + f"{name} v{version} → {output}"
+        + f"  ({len(schema)} column(s), {len(expectations)} expectation(s))"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -243,6 +377,83 @@ def diff(registry_dir: str, contract_name: str, v1: str, v2: str) -> None:
 
     try:
         registry = ContractRegistry(registry_dir)
+        contract_diff = registry.diff(contract_name, v1, v2)
+    except ContractNotFoundError as exc:
+        click.echo(click.style(f"Error: {exc}", fg="red"), err=True)
+        sys.exit(2)
+
+    print_diff(contract_diff)
+
+    if contract_diff.has_breaking_changes:
+        sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# check
+# ---------------------------------------------------------------------------
+
+
+@main.command()
+@click.argument("registry_dir", metavar="REGISTRY")
+@click.argument("contract_name", metavar="NAME")
+@click.argument("version", required=False, default=None)
+def check(registry_dir: str, contract_name: str, version: str | None) -> None:
+    """CI gate — check a contract version for breaking changes vs its predecessor.
+
+    REGISTRY is the contracts directory. NAME is the contract name.
+    VERSION defaults to the latest version in the registry.
+
+    Exit code: 0 if no breaking changes, 1 if breaking changes detected, 2 on error.
+
+    Typical CI usage (fail the pipeline on breaking changes):
+
+        datalasi check contracts/ transactions
+
+    Check a specific version against its predecessor:
+
+        datalasi check contracts/ transactions 1.2.0
+    """
+    from datalasi.cli.formatters import print_diff
+    from datalasi.errors import ContractNotFoundError
+    from datalasi.io.registry import ContractRegistry
+
+    try:
+        registry = ContractRegistry(registry_dir)
+        all_versions = registry.list_contracts().get(contract_name, [])
+    except Exception as exc:
+        click.echo(click.style(f"Error: {exc}", fg="red"), err=True)
+        sys.exit(2)
+
+    if not all_versions:
+        click.echo(
+            click.style(f"Error: No contract named {contract_name!r} found.", fg="red"), err=True
+        )
+        sys.exit(2)
+
+    if len(all_versions) < 2:
+        click.echo(f"Only one version ({all_versions[0]}) exists — nothing to compare.")
+        sys.exit(0)
+
+    if version is None:
+        v2 = all_versions[-1]
+        v1 = all_versions[-2]
+    else:
+        if version not in all_versions:
+            click.echo(
+                click.style(
+                    f"Error: version {version!r} not found. Available: {all_versions}", fg="red"
+                ),
+                err=True,
+            )
+            sys.exit(2)
+        idx = all_versions.index(version)
+        if idx == 0:
+            click.echo(f"Version {version} is the oldest — nothing to compare.")
+            sys.exit(0)
+        v2 = version
+        v1 = all_versions[idx - 1]
+
+    try:
         contract_diff = registry.diff(contract_name, v1, v2)
     except ContractNotFoundError as exc:
         click.echo(click.style(f"Error: {exc}", fg="red"), err=True)

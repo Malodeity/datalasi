@@ -199,3 +199,88 @@ class TestDataContract:
         )
         restored = DataContract.from_dict(c.to_dict())
         assert restored.tags == {"pii": "true", "team": "data-eng"}
+
+    def test_extends_roundtrip(self):
+        c = DataContract(
+            name="child",
+            version="1.0.0",
+            schema={"extra": Field("extra", String())},
+            extends="parent",
+        )
+        restored = DataContract.from_dict(c.to_dict())
+        assert restored.extends == "parent"
+
+    def test_extends_default_is_none(self, simple_contract):
+        assert simple_contract.extends is None
+
+    def test_expectation_rule_roundtrip(self):
+        from datalasi.core.expectations import ExpectationRule
+
+        c = DataContract(
+            name="t",
+            version="1.0.0",
+            schema={},
+            expectations=[
+                "amount > 0",
+                ExpectationRule("score", "between", [0, 100]),
+            ],
+        )
+        d = c.to_dict()
+        restored = DataContract.from_dict(d)
+        assert restored.expectations[0] == "amount > 0"
+        assert hasattr(restored.expectations[1], "to_expression")
+
+
+class TestContractInheritance:
+    def test_resolve_merges_schema(self, tmp_path):
+        from datalasi.io.registry import ContractRegistry
+        from datalasi.io.writers import YAMLWriter
+
+        parent = DataContract(
+            name="orders",
+            version="1.0.0",
+            schema={
+                "order_id": Field("order_id", Int64(), nullable=False),
+                "amount": Field("amount", Float64(), nullable=False),
+            },
+            owner="eng@co.com",
+        )
+        child = DataContract(
+            name="orders_express",
+            version="1.0.0",
+            schema={"delivery_date": Field("delivery_date", String())},
+            extends="orders",
+        )
+        YAMLWriter.write(parent, str(tmp_path / "orders-v1.0.0.yaml"))
+        registry = ContractRegistry(str(tmp_path))
+        merged = child.resolve(registry)
+
+        assert "order_id" in merged.schema
+        assert "amount" in merged.schema
+        assert "delivery_date" in merged.schema
+        assert merged.owner == "eng@co.com"
+
+    def test_child_overrides_parent_field(self, tmp_path):
+        from datalasi.io.registry import ContractRegistry
+        from datalasi.io.writers import YAMLWriter
+
+        parent = DataContract(
+            name="base",
+            version="1.0.0",
+            schema={"x": Field("x", String(), nullable=True)},
+        )
+        child = DataContract(
+            name="child",
+            version="1.0.0",
+            schema={"x": Field("x", String(), nullable=False)},
+            extends="base",
+        )
+        YAMLWriter.write(parent, str(tmp_path / "base-v1.0.0.yaml"))
+        registry = ContractRegistry(str(tmp_path))
+        merged = child.resolve(registry)
+        assert merged.schema["x"].nullable is False
+
+    def test_resolve_without_extends_returns_self(self, simple_contract):
+
+        result = simple_contract.resolve(None)  # registry not needed
+        assert result is simple_contract

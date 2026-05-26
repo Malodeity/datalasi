@@ -70,6 +70,8 @@ class ValidationResult:
         expectation_violations: List of data-quality rule failures.
         breaking_changes_detected: Breaking change descriptions detected when
             comparing contract versions (populated by the adapter layer).
+        coercions_applied: List of columns that were coerced to their declared
+            types when ``coerce=True`` was passed to the adapter.
         metadata: Diagnostic metadata — row counts, null percentages, etc.
     """
 
@@ -77,6 +79,7 @@ class ValidationResult:
     schema_violations: list[SchemaViolation] = field(default_factory=list)
     expectation_violations: list[ExpectationViolation] = field(default_factory=list)
     breaking_changes_detected: list[str] = field(default_factory=list)
+    coercions_applied: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __str__(self) -> str:
@@ -90,4 +93,8 @@ class ValidationResult:
             lines.append(f"  expectation_violations ({len(self.expectation_violations)}):")
             for v in self.expectation_violations:
                 lines.append(f"    {v}")
+        if self.coercions_applied:
+            lines.append(f"  coercions_applied ({len(self.coercions_applied)}):")
+            for c in self.coercions_applied:
+                lines.append(f"    {c}")
         return "\n".join(lines)

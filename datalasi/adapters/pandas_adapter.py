@@ -19,15 +19,26 @@ class PandasAdapter:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def validate(df: pd.DataFrame, contract: DataContract) -> ValidationResult:
+    def validate(
+        df: pd.DataFrame, contract: DataContract, coerce: bool = False
+    ) -> ValidationResult:
         """Validate *df* against *contract* and return a
         :class:`~datalasi.core.validation.ValidationResult`.
 
         Checks performed, in order:
-        1. Schema — missing columns, type mismatches, nullability violations,
+        1. (Optional) Coercion — cast columns to their declared types when
+           ``coerce=True``.  The original DataFrame is never mutated.
+        2. Schema — missing columns, type mismatches, nullability violations,
            unknown columns, and Enum value violations.
-        2. Expectations — each rule string is evaluated against *df*.
-        3. Metadata — row count, null counts, cardinality.
+        3. Expectations — each rule string or :class:`~datalasi.core.expectations.ExpectationRule`
+           is evaluated against *df*.
+        4. Metadata — row count, null counts, cardinality.
+
+        Args:
+            df: The DataFrame to validate.
+            contract: The contract to validate against.
+            coerce: When ``True``, attempt to coerce each column to its
+                declared type before running schema checks.
         """
 
         from datalasi.core.validation import (
@@ -37,6 +48,17 @@ class PandasAdapter:
         )
 
         result = ValidationResult(success=True)
+
+        # ---- 0. Coercion (optional) --------------------------------------
+        if coerce:
+            df = df.copy()
+            for col_name, field in contract.schema.items():
+                if col_name not in df.columns:
+                    continue
+                coerced, label = PandasAdapter._try_coerce_column(df[col_name], field.type)
+                if label:
+                    df[col_name] = coerced
+                    result.coercions_applied.append(f"{col_name}: {label}")
 
         # ---- 1. Schema validation ----------------------------------------
         for col_name, field in contract.schema.items():
@@ -111,8 +133,17 @@ class PandasAdapter:
 
         # ---- 2. Expectations validation ----------------------------------
         for rule in contract.expectations:
+            if hasattr(rule, "to_expression"):
+                expr = rule.to_expression()
+                rule_label = str(rule)
+                severity = getattr(rule, "severity", "ERROR")
+            else:
+                expr = str(rule)
+                rule_label = expr
+                severity = "ERROR"
+
             try:
-                mask = PandasAdapter._eval_expectation(df, rule)
+                mask = PandasAdapter._eval_expectation(df, expr)
                 failing = ~mask
                 failing_count = int(failing.sum())
                 if failing_count > 0:
@@ -125,17 +156,19 @@ class PandasAdapter:
                             break
                     result.expectation_violations.append(
                         ExpectationViolation(
-                            rule=rule,
+                            rule=expr,
+                            description=rule_label if rule_label != expr else None,
                             row_count=failing_count,
                             row_indices=failing_indices,
                             sample_values=sample,
                         )
                     )
-                    result.success = False
+                    if severity == "ERROR":
+                        result.success = False
             except Exception as exc:
                 result.expectation_violations.append(
                     ExpectationViolation(
-                        rule=rule,
+                        rule=expr,
                         description=f"Error evaluating rule: {exc}",
                         row_count=0,
                     )
@@ -240,6 +273,39 @@ class PandasAdapter:
             return result.astype(bool).fillna(False)
         # Scalar True/False — broadcast to all rows
         return pd.Series([bool(result)] * len(df), index=df.index)
+
+    @staticmethod
+    def _try_coerce_column(series: pd.Series, contract_type: Any) -> tuple[pd.Series, str]:
+        """Attempt to cast *series* to *contract_type*.
+
+        Returns:
+            ``(coerced_series, label)`` where *label* describes the coercion
+            (e.g. ``"object → Int64"``).  If no coercion is needed or possible,
+            *label* is an empty string and *coerced_series* is the original.
+        """
+        import pandas as pd
+
+        type_name = contract_type.name
+        orig_dtype = str(series.dtype)
+
+        try:
+            if type_name in ("Int64", "Int32"):
+                target = "Int64" if type_name == "Int64" else "Int32"
+                coerced = pd.to_numeric(series, errors="coerce").astype(target)
+            elif type_name == "Float64":
+                coerced = pd.to_numeric(series, errors="coerce")
+            elif type_name in ("String", "Enum", "Date"):
+                coerced = series.where(series.isna(), series.astype(str))
+            elif type_name == "Boolean":
+                coerced = series.astype(bool)
+            else:
+                return series, ""
+
+            if str(coerced.dtype) != orig_dtype:
+                return coerced, f"{orig_dtype} → {type_name}"
+            return series, ""
+        except Exception:
+            return series, ""
 
     @staticmethod
     def _collect_metadata(df: pd.DataFrame, contract: DataContract) -> dict[str, Any]:

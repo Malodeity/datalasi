@@ -27,6 +27,7 @@ Quick start::
 """
 
 from datalasi.core.contract import DataContract, Field
+from datalasi.core.expectations import ExpectationRule
 from datalasi.core.types import (
     Boolean,
     DataType,
@@ -50,6 +51,8 @@ from datalasi.errors import (
     SchemaValidationError,
     TypeValidationError,
 )
+from datalasi.export.avro import to_avro_schema
+from datalasi.export.json_schema import to_json_schema
 from datalasi.io.registry import ContractDiff, ContractRegistry
 from datalasi.version import __version__
 
@@ -61,6 +64,8 @@ __all__ = [
     # Contract model
     "DataContract",
     "Field",
+    # Expectations DSL
+    "ExpectationRule",
     # Types
     "DataType",
     "Int64",
@@ -75,6 +80,9 @@ __all__ = [
     "ValidationResult",
     "SchemaViolation",
     "ExpectationViolation",
+    # Schema export
+    "to_json_schema",
+    "to_avro_schema",
     # Errors
     "ContractError",
     "SchemaValidationError",

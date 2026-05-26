@@ -306,3 +306,111 @@ class TestInferSchema:
         df = pd.DataFrame({"x": [1], "y": [2], "z": [3]})
         schema = PandasAdapter.infer_schema(df)
         assert set(schema.keys()) == {"x", "y", "z"}
+
+
+# ---------------------------------------------------------------------------
+# Coercion mode
+# ---------------------------------------------------------------------------
+
+
+class TestCoercionMode:
+    def test_coerce_string_to_float(self):
+        contract = DataContract(
+            name="t",
+            version="1.0.0",
+            schema={"amount": Field("amount", Float64(), nullable=False)},
+        )
+        df = pd.DataFrame({"amount": ["1.5", "2.0", "3.5"]})
+        result = PandasAdapter.validate(df, contract, coerce=True)
+        assert result.success is True
+        assert any("amount" in c for c in result.coercions_applied)
+
+    def test_coerce_does_not_mutate_original(self):
+        contract = DataContract(
+            name="t",
+            version="1.0.0",
+            schema={"x": Field("x", Int64(), nullable=False)},
+        )
+        df = pd.DataFrame({"x": ["1", "2", "3"]})
+        orig_dtype = str(df["x"].dtype)
+        PandasAdapter.validate(df, contract, coerce=True)
+        assert str(df["x"].dtype) == orig_dtype
+
+    def test_no_coercions_when_types_match(self):
+        contract = DataContract(
+            name="t",
+            version="1.0.0",
+            schema={"x": Field("x", Float64(), nullable=False)},
+        )
+        df = pd.DataFrame({"x": [1.0, 2.0, 3.0]})
+        result = PandasAdapter.validate(df, contract, coerce=True)
+        assert result.coercions_applied == []
+
+
+# ---------------------------------------------------------------------------
+# ExpectationRule DSL
+# ---------------------------------------------------------------------------
+
+
+class TestExpectationRuleDSL:
+    def test_structured_rule_passes(self):
+        from datalasi.core.expectations import ExpectationRule
+
+        contract = DataContract(
+            name="t",
+            version="1.0.0",
+            schema={"amount": Field("amount", Float64())},
+            expectations=[ExpectationRule("amount", "gt", 0)],
+        )
+        df = pd.DataFrame({"amount": [1.0, 2.0, 3.0]})
+        result = PandasAdapter.validate(df, contract)
+        assert result.success is True
+
+    def test_structured_rule_fails(self):
+        from datalasi.core.expectations import ExpectationRule
+
+        contract = DataContract(
+            name="t",
+            version="1.0.0",
+            schema={"amount": Field("amount", Float64())},
+            expectations=[ExpectationRule("amount", "gt", 0)],
+        )
+        df = pd.DataFrame({"amount": [1.0, -1.0, 3.0]})
+        result = PandasAdapter.validate(df, contract)
+        assert result.success is False
+        assert result.expectation_violations[0].row_count == 1
+
+    def test_warning_severity_does_not_fail(self):
+        from datalasi.core.expectations import ExpectationRule
+
+        contract = DataContract(
+            name="t",
+            version="1.0.0",
+            schema={"amount": Field("amount", Float64())},
+            expectations=[
+                ExpectationRule("amount", "gt", 0, severity="WARNING"),
+            ],
+        )
+        df = pd.DataFrame({"amount": [1.0, -1.0, 3.0]})
+        result = PandasAdapter.validate(df, contract)
+        assert result.success is True  # WARNING doesn't fail
+        assert len(result.expectation_violations) == 1
+
+    def test_rule_serializes_and_deserializes(self):
+        from datalasi.core.expectations import ExpectationRule
+        from datalasi.io.writers import YAMLWriter
+
+        contract = DataContract(
+            name="t",
+            version="1.0.0",
+            schema={"x": Field("x", Float64())},
+            expectations=[ExpectationRule("x", "gte", 0, description="Non-negative")],
+        )
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".yaml", delete=False) as f:
+            path = f.name
+        YAMLWriter.write(contract, path)
+        loaded = DataContract.load(path)
+        assert len(loaded.expectations) == 1
+        assert hasattr(loaded.expectations[0], "to_expression")

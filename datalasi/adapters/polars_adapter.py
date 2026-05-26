@@ -19,15 +19,25 @@ class PolarsAdapter:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def validate(df: pl.DataFrame, contract: DataContract) -> ValidationResult:
+    def validate(
+        df: pl.DataFrame, contract: DataContract, coerce: bool = False
+    ) -> ValidationResult:
         """Validate *df* against *contract* and return a
         :class:`~datalasi.core.validation.ValidationResult`.
 
         Checks performed, in order:
-        1. Schema — missing columns, type mismatches, nullability violations,
+        1. (Optional) Coercion — cast columns to their declared types when
+           ``coerce=True``.
+        2. Schema — missing columns, type mismatches, nullability violations,
            unknown columns, and Enum value violations.
-        2. Expectations — each rule string is evaluated against *df*.
-        3. Metadata — row count, null counts, cardinality.
+        3. Expectations — each rule string or
+           :class:`~datalasi.core.expectations.ExpectationRule` is evaluated.
+        4. Metadata — row count, null counts, cardinality.
+
+        Args:
+            df: The Polars DataFrame to validate.
+            contract: The contract to validate against.
+            coerce: When ``True``, attempt to cast each column to its declared type.
         """
         from datalasi.core.validation import (
             ExpectationViolation,
@@ -36,6 +46,16 @@ class PolarsAdapter:
         )
 
         result = ValidationResult(success=True)
+
+        # ---- 0. Coercion (optional) --------------------------------------
+        if coerce:
+            for col_name, field in contract.schema.items():
+                if col_name not in df.columns:
+                    continue
+                coerced_df, label = PolarsAdapter._try_coerce_column(df, col_name, field.type)
+                if label:
+                    df = coerced_df
+                    result.coercions_applied.append(f"{col_name}: {label}")
 
         # ---- 1. Schema validation ----------------------------------------
         schema_types = dict(zip(df.columns, df.dtypes))
@@ -115,23 +135,34 @@ class PolarsAdapter:
 
         # ---- 2. Expectations validation ----------------------------------
         for rule in contract.expectations:
+            if hasattr(rule, "to_expression"):
+                expr = rule.to_expression()
+                rule_label = str(rule)
+                severity = getattr(rule, "severity", "ERROR")
+            else:
+                expr = str(rule)
+                rule_label = expr
+                severity = "ERROR"
+
             try:
-                mask = PolarsAdapter._eval_expectation(df, rule)
+                mask = PolarsAdapter._eval_expectation(df, expr)
                 failing_indices = [i for i, v in enumerate(mask.to_list()) if not v]
                 failing_count = len(failing_indices)
                 if failing_count > 0:
                     result.expectation_violations.append(
                         ExpectationViolation(
-                            rule=rule,
+                            rule=expr,
+                            description=rule_label if rule_label != expr else None,
                             row_count=failing_count,
                             row_indices=failing_indices[:1000],
                         )
                     )
-                    result.success = False
+                    if severity == "ERROR":
+                        result.success = False
             except Exception as exc:
                 result.expectation_violations.append(
                     ExpectationViolation(
-                        rule=rule,
+                        rule=expr,
                         description=f"Error evaluating rule: {exc}",
                         row_count=0,
                     )
@@ -283,6 +314,46 @@ class PolarsAdapter:
             return result.cast(pl.Boolean).fill_null(False)
         # Scalar
         return pl.Series([bool(result)] * len(df))
+
+    @staticmethod
+    def _try_coerce_column(
+        df: pl.DataFrame, col_name: str, contract_type: Any
+    ) -> tuple[pl.DataFrame, str]:
+        """Attempt to cast *col_name* in *df* to *contract_type*.
+
+        Returns:
+            ``(new_df, label)`` where *label* describes the coercion.
+            Returns ``(df, "")`` if no coercion is needed or possible.
+        """
+        import polars as pl
+
+        type_name = contract_type.name
+        orig_dtype = str(df[col_name].dtype)
+
+        dtype_map: dict[str, Any] = {
+            "Int64": pl.Int64,
+            "Int32": pl.Int32,
+            "Float64": pl.Float64,
+            "Boolean": pl.Boolean,
+            "Date": pl.Date,
+            "Timestamp": pl.Datetime,
+        }
+
+        if type_name in ("String", "Enum"):
+            target = pl.Utf8
+        elif type_name in dtype_map:
+            target = dtype_map[type_name]
+        else:
+            return df, ""
+
+        try:
+            new_df = df.with_columns(pl.col(col_name).cast(target, strict=False))
+            new_dtype = str(new_df[col_name].dtype)
+            if new_dtype != orig_dtype:
+                return new_df, f"{orig_dtype} → {type_name}"
+            return df, ""
+        except Exception:
+            return df, ""
 
     @staticmethod
     def _collect_metadata(df: pl.DataFrame, contract: DataContract) -> dict[str, Any]:

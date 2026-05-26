@@ -1,0 +1,149 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/Malodeity/datalasi/blob/main/datalasi-schema.json",
+  "title": "datalasi Data Contract",
+  "description": "A versioned data schema contract — https://github.com/Malodeity/datalasi",
+  "type": "object",
+  "required": ["name", "version", "schema"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Unique contract identifier, e.g. 'transactions'"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version (MAJOR.MINOR.PATCH), e.g. '1.0.0'"
+    },
+    "extends": {
+      "type": "string",
+      "description": "Parent contract name to inherit schema and expectations from"
+    },
+    "owner": {
+      "type": "string",
+      "description": "Email address or team name responsible for this contract"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of the dataset"
+    },
+    "breaking_changes": {
+      "type": "string",
+      "enum": ["FAIL", "WARN", "IGNORE"],
+      "default": "FAIL",
+      "description": "How to respond when breaking schema changes are detected"
+    },
+    "tags": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "Arbitrary key/value metadata, e.g. {pii: 'true', domain: 'finance'}"
+    },
+    "schema": {
+      "type": "object",
+      "description": "Column definitions keyed by column name",
+      "additionalProperties": { "$ref": "#/definitions/field" }
+    },
+    "expectations": {
+      "type": "array",
+      "description": "Data-quality rules — plain strings or structured ExpectationRule objects",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "Python expression evaluated against column Series, e.g. 'amount > 0'"
+          },
+          { "$ref": "#/definitions/expectation_rule" }
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "field": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["Int64", "Int32", "Float64", "String", "Boolean", "Date", "Timestamp", "Enum"],
+          "description": "Data type for this column"
+        },
+        "nullable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the column may contain null values"
+        },
+        "pk": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether this column is part of the primary key"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable documentation for this column"
+        },
+        "min": {
+          "type": "number",
+          "description": "Minimum allowed value (Int64, Int32, Float64)"
+        },
+        "max": {
+          "type": "number",
+          "description": "Maximum allowed value (Int64, Int32, Float64)"
+        },
+        "max_length": {
+          "type": "integer",
+          "description": "Maximum string length (String)"
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Regex pattern the value must match (String)"
+        },
+        "timezone": {
+          "type": "string",
+          "description": "Timezone label, e.g. 'UTC' (Timestamp)"
+        },
+        "allowed_values": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Allowed string values (Enum)"
+        }
+      }
+    },
+    "expectation_rule": {
+      "type": "object",
+      "required": ["column", "rule"],
+      "additionalProperties": false,
+      "description": "A structured data-quality rule for a single column",
+      "properties": {
+        "column": {
+          "type": "string",
+          "description": "Column name this rule applies to"
+        },
+        "rule": {
+          "type": "string",
+          "enum": [
+            "not_null", "unique",
+            "gt", "gte", "lt", "lte", "eq", "ne",
+            "in", "not_in", "regex", "between"
+          ],
+          "description": "Rule type"
+        },
+        "value": {
+          "description": "Threshold or reference value (not required for not_null/unique)"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable label shown in violation reports"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["ERROR", "WARNING"],
+          "default": "ERROR",
+          "description": "ERROR fails validation; WARNING records without failing"
+        }
+      }
+    }
+  }
+}

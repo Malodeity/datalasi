@@ -223,7 +223,7 @@ class TestDiffCommand:
 def test_version_flag(runner):
     result = runner.invoke(main, ["--version"])
     assert result.exit_code == 0
-    assert "0.1.0" in result.output
+    assert "0.2.0" in result.output
 
 
 def test_help(runner):
@@ -233,3 +233,120 @@ def test_help(runner):
     assert "infer" in result.output
     assert "list" in result.output
     assert "diff" in result.output
+
+
+# ---------------------------------------------------------------------------
+# check command
+# ---------------------------------------------------------------------------
+
+
+class TestCheck:
+    def _write_two_versions(self, tmp_path):
+        from datalasi.io.writers import YAMLWriter
+
+        v1 = _make_contract(version="1.0.0")
+        v2 = _make_contract(version="1.1.0")
+        v2.schema["new_col"] = Field("new_col", String())  # non-breaking addition
+        YAMLWriter.write(v1, str(tmp_path / "orders-v1.0.0.yaml"))
+        YAMLWriter.write(v2, str(tmp_path / "orders-v1.1.0.yaml"))
+        return tmp_path
+
+    def test_no_breaking_changes_exits_zero(self, runner, tmp_path):
+        self._write_two_versions(tmp_path)
+        result = runner.invoke(main, ["check", str(tmp_path), "orders"])
+        assert result.exit_code == 0
+
+    def test_breaking_change_exits_one(self, runner, tmp_path):
+        from datalasi.core.contract import DataContract
+        from datalasi.io.writers import YAMLWriter
+
+        v1 = _make_contract(version="1.0.0")
+        v2 = DataContract(
+            name="orders",
+            version="2.0.0",
+            schema={
+                "id": Field("id", Int64(), nullable=False),
+                # amount removed — breaking!
+            },
+        )
+        YAMLWriter.write(v1, str(tmp_path / "v1.yaml"))
+        YAMLWriter.write(v2, str(tmp_path / "v2.yaml"))
+        result = runner.invoke(main, ["check", str(tmp_path), "orders"])
+        assert result.exit_code == 1
+
+    def test_only_one_version_exits_zero(self, runner, tmp_path):
+        from datalasi.io.writers import YAMLWriter
+
+        YAMLWriter.write(_make_contract(), str(tmp_path / "v1.yaml"))
+        result = runner.invoke(main, ["check", str(tmp_path), "orders"])
+        assert result.exit_code == 0
+        assert "Only one version" in result.output
+
+    def test_unknown_contract_exits_two(self, runner, tmp_path):
+        result = runner.invoke(main, ["check", str(tmp_path), "nonexistent"])
+        assert result.exit_code == 2
+
+    def test_specific_version(self, runner, tmp_path):
+        self._write_two_versions(tmp_path)
+        result = runner.invoke(main, ["check", str(tmp_path), "orders", "1.1.0"])
+        assert result.exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# init command
+# ---------------------------------------------------------------------------
+
+
+class TestInit:
+    def test_init_creates_file(self, runner, tmp_path):
+        output = str(tmp_path / "out.yaml")
+        inputs = "\n".join(
+            [
+                "mycontract",  # name
+                "1.0.0",  # version
+                "",  # owner (skip)
+                "",  # description (skip)
+                "price",  # column name
+                "Float64",  # type
+                "",  # min
+                "",  # max
+                "N",  # nullable
+                "N",  # pk
+                "",  # col description
+                "",  # stop adding columns
+                "",  # stop adding expectations
+                output,  # output path
+            ]
+        )
+        result = runner.invoke(main, ["init"], input=inputs)
+        assert result.exit_code == 0, result.output
+        from datalasi.io.loaders import YAMLLoader
+
+        contract = YAMLLoader.load(output)
+        assert contract.name == "mycontract"
+        assert "price" in contract.schema
+
+    def test_init_output_flag(self, runner, tmp_path):
+        output = str(tmp_path / "flagged.yaml")
+        inputs = "\n".join(
+            [
+                "flagcontract",
+                "1.0.0",
+                "",
+                "",
+                "x",
+                "String",
+                "",
+                "",
+                "Y",
+                "N",
+                "",
+                "",
+                "",
+            ]
+        )
+        result = runner.invoke(main, ["init", "--output", output], input=inputs)
+        assert result.exit_code == 0, result.output
+        import os
+
+        assert os.path.exists(output)
