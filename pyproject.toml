@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "datalasi"
-version = "0.2.0"
+version = "0.3.0"
 description = "Define data contracts as YAML, validate pandas/polars/arrow DataFrames, and gate CI on breaking schema changes"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -38,6 +38,7 @@ classifiers = [
 dependencies = [
   "PyYAML>=6.0",
   "click>=8.0",
+  "rich>=13.0",
   "typing-extensions>=4.0; python_version < '3.11'",
 ]
 

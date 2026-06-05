@@ -466,6 +466,123 @@ def check(registry_dir: str, contract_name: str, version: str | None) -> None:
 
 
 # ---------------------------------------------------------------------------
+# dbt
+# ---------------------------------------------------------------------------
+
+
+@main.command()
+@click.argument("contract_path", metavar="CONTRACT")
+@click.option(
+    "--output",
+    default=None,
+    metavar="PATH",
+    help="Output YAML file path. Defaults to stdout.",
+)
+@click.option("--model-name", default=None, help="Override the dbt model name.")
+@click.option(
+    "--source",
+    default=None,
+    metavar="SOURCE_NAME",
+    help="Wrap in a sources block with this source name.",
+)
+def dbt(contract_path: str, output: str | None, model_name: str | None, source: str | None) -> None:
+    """Generate a dbt schema.yml from a contract.
+
+    CONTRACT is a path to a YAML contract file.
+
+    Writes a ready-to-use dbt schema file with not_null, unique,
+    accepted_values, and dbt_utils constraint tests.
+
+    Examples:
+
+        datalasi dbt contracts/transactions-v1.0.0.yaml
+
+        datalasi dbt contracts/orders-v1.0.0.yaml --output models/staging/schema.yml
+
+        datalasi dbt contracts/orders-v1.0.0.yaml --source raw_postgres
+    """
+    from datalasi.errors import ContractLoadError
+    from datalasi.export.dbt import to_dbt_schema_yaml
+    from datalasi.io.loaders import YAMLLoader
+
+    try:
+        contract = YAMLLoader.load(contract_path)
+    except FileNotFoundError:
+        click.echo(click.style(f"Error: contract not found: {contract_path}", fg="red"), err=True)
+        sys.exit(2)
+    except ContractLoadError as exc:
+        click.echo(click.style(f"Error loading contract: {exc}", fg="red"), err=True)
+        sys.exit(2)
+
+    yaml_str = to_dbt_schema_yaml(contract, model_name=model_name, source_name=source)
+
+    if output:
+        from pathlib import Path
+
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        Path(output).write_text(yaml_str)
+        click.echo(
+            click.style("✓ dbt schema written: ", fg="green") + f"{contract.name} → {output}"
+        )
+    else:
+        click.echo(yaml_str)
+
+
+# ---------------------------------------------------------------------------
+# pydantic
+# ---------------------------------------------------------------------------
+
+
+@main.command()
+@click.argument("contract_path", metavar="CONTRACT")
+@click.option(
+    "--output",
+    default=None,
+    metavar="PATH",
+    help="Output .py file path. Defaults to stdout.",
+)
+def pydantic(contract_path: str, output: str | None) -> None:
+    """Generate a Pydantic BaseModel from a contract.
+
+    CONTRACT is a path to a YAML contract file.
+
+    Produces a Python source file with a Pydantic v2 BaseModel class,
+    type annotations, and field validators derived from the contract schema.
+
+    Examples:
+
+        datalasi pydantic contracts/transactions-v1.0.0.yaml
+
+        datalasi pydantic contracts/orders-v1.0.0.yaml --output models/orders.py
+    """
+    from datalasi.errors import ContractLoadError
+    from datalasi.export.pydantic_model import to_pydantic_source
+    from datalasi.io.loaders import YAMLLoader
+
+    try:
+        contract = YAMLLoader.load(contract_path)
+    except FileNotFoundError:
+        click.echo(click.style(f"Error: contract not found: {contract_path}", fg="red"), err=True)
+        sys.exit(2)
+    except ContractLoadError as exc:
+        click.echo(click.style(f"Error loading contract: {exc}", fg="red"), err=True)
+        sys.exit(2)
+
+    source = to_pydantic_source(contract)
+
+    if output:
+        from pathlib import Path
+
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        Path(output).write_text(source)
+        click.echo(
+            click.style("✓ Pydantic model written: ", fg="green") + f"{contract.name} → {output}"
+        )
+    else:
+        click.echo(source)
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 

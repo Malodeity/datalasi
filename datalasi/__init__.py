@@ -52,7 +52,9 @@ from datalasi.errors import (
     TypeValidationError,
 )
 from datalasi.export.avro import to_avro_schema
+from datalasi.export.dbt import to_dbt_schema, to_dbt_schema_yaml
 from datalasi.export.json_schema import to_json_schema
+from datalasi.export.pydantic_model import to_pydantic_model, to_pydantic_source
 from datalasi.io.registry import ContractDiff, ContractRegistry
 from datalasi.version import __version__
 
@@ -83,6 +85,10 @@ __all__ = [
     # Schema export
     "to_json_schema",
     "to_avro_schema",
+    "to_dbt_schema",
+    "to_dbt_schema_yaml",
+    "to_pydantic_source",
+    "to_pydantic_model",
     # Errors
     "ContractError",
     "SchemaValidationError",

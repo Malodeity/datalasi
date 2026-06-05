@@ -226,6 +226,65 @@ class DataContract:
 
         return to_avro_schema(self)
 
+    def to_dbt_schema(
+        self,
+        model_name: str | None = None,
+        source_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Export this contract as a dbt ``schema.yml`` structure.
+
+        Generates ``not_null``, ``unique``, ``accepted_values``, and
+        ``dbt_utils.expression_is_true`` tests from field metadata.
+
+        Args:
+            model_name: Override the dbt model name (defaults to ``self.name``).
+            source_name: When set, wraps the entry in a ``sources`` block.
+
+        Returns:
+            A YAML-serialisable dict for use in a dbt project.
+        """
+        from datalasi.export.dbt import to_dbt_schema
+
+        return to_dbt_schema(self, model_name=model_name, source_name=source_name)
+
+    def to_dbt_schema_yaml(
+        self,
+        model_name: str | None = None,
+        source_name: str | None = None,
+    ) -> str:
+        """Export this contract as a dbt ``schema.yml`` YAML string."""
+        from datalasi.export.dbt import to_dbt_schema_yaml
+
+        return to_dbt_schema_yaml(self, model_name=model_name, source_name=source_name)
+
+    def to_pydantic(self) -> str:
+        """Generate a Pydantic ``BaseModel`` source file from this contract.
+
+        Returns a Python source string you can write to a ``.py`` file.
+        Targets Pydantic v2 with Python 3.9+ compatibility.
+
+        Example::
+
+            Path("models/transactions.py").write_text(contract.to_pydantic())
+        """
+        from datalasi.export.pydantic_model import to_pydantic_source
+
+        return to_pydantic_source(self)
+
+    def to_pydantic_model(self) -> Any:
+        """Return a live Pydantic ``BaseModel`` class built from this contract.
+
+        Requires pydantic to be installed (``pip install pydantic``).
+
+        Example::
+
+            Order = contract.to_pydantic_model()
+            order = Order(order_id=1, amount=99.99, status="COMPLETED")
+        """
+        from datalasi.export.pydantic_model import to_pydantic_model
+
+        return to_pydantic_model(self)
+
     # ------------------------------------------------------------------
     # Persistence helpers
     # ------------------------------------------------------------------
